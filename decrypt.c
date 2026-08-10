@@ -11,6 +11,18 @@
 #include "kcipher2.h"
 #include <sys/mman.h>
 
+static int hexval(int c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+static void parse_hex(const char *hex, uint8_t *out, int len) {
+    for (int i = 0; i < len; i++) {
+        out[i] = (hexval(hex[2*i]) << 4) | hexval(hex[2*i+1]);
+    }
+}
+
 
 uint32_t swap32(uint32_t x)
 {
@@ -348,7 +360,26 @@ int main(int argc, char *argv[])
     // printf("Test zero input: ");
     // decrypt_file_bykey("test-zero/mytest.akira", chacha8_key, cacha8_nonce, kcipher2_key, kcipher2_iv);
 
-    if (argc > 5) {
+    if (argc > 2 && strcmp(argv[1], "bykey") == 0) {
+        // Usage: decrypt bykey <filename> <chacha8_key_hex> <chacha8_nonce_hex> <kcipher2_key_hex> <kcipher2_iv_hex>
+        if (argc < 7) {
+            printf("Usage: %s bykey <filename> <chacha8_key_64hex> <chacha8_nonce_32hex> <kcipher2_key_32hex> <kcipher2_iv_32hex>\n", argv[0]);
+            return 1;
+        }
+        uint8_t chacha8_key[32];
+        uint8_t chacha8_nonce[16];
+        uint8_t kcipher2_key[16];
+        uint8_t kcipher2_iv[16];
+        parse_hex(argv[3], chacha8_key, 32);
+        parse_hex(argv[4], chacha8_nonce, 16);
+        parse_hex(argv[5], kcipher2_key, 16);
+        parse_hex(argv[6], kcipher2_iv, 16);
+        printf("chacha8_key:   "); hexdump("", chacha8_key, 32);
+        printf("chacha8_nonce: "); hexdump("", chacha8_nonce, 16);
+        printf("kcipher2_key:  "); hexdump("", kcipher2_key, 16);
+        printf("kcipher2_iv:   "); hexdump("", kcipher2_iv, 16);
+        decrypt_file_bykey(argv[2], chacha8_key, chacha8_nonce, kcipher2_key, kcipher2_iv);
+    } else if (argc > 5) {
         uint64_t t1 = atoll(argv[2]);
         uint64_t t2 = atoll(argv[3]);
         uint64_t t3 = atoll(argv[4]);
@@ -356,6 +387,7 @@ int main(int argc, char *argv[])
         decrypt_file(argv[1], t1, t2, t3, t4);
     } else {
         printf("Usage: %s <filename> <t1> <t2> <t3> <t4>\n", argv[0]);
+        printf("   or: %s bykey <filename> <chacha8_key_64hex> <chacha8_nonce_32hex> <kcipher2_key_32hex> <kcipher2_iv_32hex>\n", argv[0]);
     }
 
 

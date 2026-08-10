@@ -1,0 +1,19 @@
+# compiled binaries
+akira-bruteforce
+decrypt
+public-key-patch/patch-public-key
+public-key-patch/read-trailer
+public-key-patch/read-log
+timing-patch-2/patcher
+tests/zeroes_test
+tests/ones_test
+
+# test/artifact files
+*.akira
+*.akira.copy
+*.akir
+hello_world*
+
+# build artifacts
+*.o
+*.d
