@@ -73,6 +73,89 @@ Obtaining ciphertext: use a hex editor, or use the "readhex" in the util directo
 ./util/readhex  tests/ones.vmdk.akira 65535 # for chacha8
 ```
 
+## Distributed GPU search
+
+For large T3 windows (hundreds of milliseconds) split the search across multiple GPUs or machines.
+
+### 1. Generate per-GPU configs
+
+`gen_configs.py` divides a T3 window into per-GPU slices proportional to each GPU's speed:
+
+```
+python gen_configs.py \
+  --t3-start <first_T3_ns> --t3-end <last_T3_ns> \
+  --offset <min_gap_ns> --range <gap_width_ns> \
+  --plaintext 0x<8_known_bytes_hex> --encrypted 0x<8_ciphertext_bytes_hex> \
+  --gpus <N> [--gpu-speed 1.0,1.0,...,0.69] \
+  --out-dir search_configs --prefix config_gpu
+```
+
+Key parameters:
+* `--t3-start` / `--t3-end`: T3 search window in nanoseconds (derive from file mtime and `hostd.log` for millisecond precision)
+* `--offset`: minimum expected T4−T3 gap in nanoseconds (measure on the target ESXi host with `timing-patch-2`)
+* `--range`: width of gap band to test (e.g. `800000` = 0.8 ms)
+* `--gpu-speed`: relative throughput per GPU — slower GPUs get a proportionally smaller T3 slice
+
+Output: one `config_gpu<N>.json` per GPU, ready to pass to `akira-bruteforce run2`.
+
+### 2. Launch GPUs on a machine
+
+```bash
+chmod +x launch_gpus.sh
+./launch_gpus.sh search_configs 0 1 2 3 4 5 6 7
+```
+
+Each GPU runs in the background (`nohup`) and writes output to `search_configs/gpu<N>.log`.
+On `tii_cuda_server` GPUs 0–1 belong to another tenant — use `2 3 4 5 6 7` there.
+
+### 3. Monitor progress
+
+```bash
+chmod +x monitor_gpus.sh
+# one-shot
+./monitor_gpus.sh search_configs 0 1 2 3 4 5 6 7
+
+# continuous (every 10 s)
+watch -n 10 ./monitor_gpus.sh search_configs 0 1 2 3 4 5 6 7
+```
+
+Progress is read from checkpoint files (`<config>.checkpoint.json`). Matches are reported from
+`output.txt` and each GPU's log file. When a match is found the output shows:
+
+```
+Found at offset=<gap_ns> ts=<start_timestamp> + <idx>  →  T3=<ts+idx>  T4=<ts+idx+gap>
+```
+
+### 4. Decrypt
+
+Once T3 and T4 are recovered:
+
+```bash
+# using raw timestamps (T1/T2 required for ChaCha8 regions; pass 0 0 if only KCipher2 matters)
+./decrypt <file.akira> <T1> <T2> <T3> <T4>
+
+# using raw hex keys (if you derived key/IV directly from T3/T4 via Yarrow)
+./decrypt bykey <file.akira> <chacha8_key_64hex> <chacha8_nonce_32hex> <kcipher2_key_32hex> <kcipher2_iv_32hex>
+```
+
+The file is decrypted in-place and renamed (`.akira` suffix removed).
+
+---
+
+## Bug fix — run2 kernel bounds check
+
+This fork fixes a bounds-check bug in `encrypt_and_search_offset` (the kernel used by `run2`).
+
+The original code had:
+```c
+size_t idx_offs = idx + offset;   // offset = current T4−T3 gap being tested
+if (idx_offs >= N) return;        // N = limit — WRONG
+```
+
+`idx_offs` indexes the full hash array of size `count`; using `N = limit` (= `count − brute_force_time_range − offset`) silently discards T4 candidates in `[limit, count)`. When `offset ≥ limit` (small `count` configs) every thread returns immediately and nothing is searched. The fix removes the guard — the host already guarantees `idx_offs < count` for all valid threads.
+
+---
+
 ## chacha8 bruteforce
 
 An example chacha config is like this
