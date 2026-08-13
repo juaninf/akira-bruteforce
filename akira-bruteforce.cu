@@ -1666,10 +1666,11 @@ __global__ void encrypt_and_search_offset(const uint8_t *in, size_t offset,
 
     size_t idx_offs = idx + offset;
 
-    if (idx_offs >= N)
-    {
-        return;
-    }
+    // FIX: idx_offs indexes the full `num`-sized hash array, NOT N (=limit).
+    // The host guarantees idx_offs < num whenever idx < N, so the old guard
+    // `if (idx_offs >= N) return;` wrongly discarded valid T3 candidates in
+    // [N-offset, N) and, when offset >= N, returned for EVERY thread (searching
+    // nothing). No bound needed here.
 
 
     __shared__ unsigned char gf2_table_shared[256];
