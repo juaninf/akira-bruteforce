@@ -2,10 +2,10 @@
 # Monitor akira-bruteforce progress across GPUs on this machine.
 #
 # Usage:
-#   ./monitor_gpus.sh <config_dir> <gpu_id> [gpu_id ...]
+#   ./monitor_gpus.sh <config_dir> <gpu_id[:config_id]> [gpu_id[:config_id] ...]
 #
 # Example:
-#   ./monitor_gpus.sh search_final 2 3 4 5 6 7
+#   ./monitor_gpus.sh search_final 2:0 3:1 4:2 5:3 6:4 7:5
 #
 # Shows per-GPU progress from checkpoint files and any matches found.
 # Run repeatedly (or with watch) to track progress:
@@ -14,22 +14,37 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <config_dir> <gpu_id> [gpu_id ...]"
+    echo "Usage: $0 <config_dir> <gpu_id[:config_id]> [gpu_id[:config_id] ...]"
     exit 1
 fi
 
 CONFIG_DIR="$1"; shift
-GPUS=("$@")
+MAPPINGS=("$@")
 
 echo "=== Progress  $(date '+%Y-%m-%d %H:%M:%S') ==="
 echo ""
 
-for GPU in "${GPUS[@]}"; do
-    CONFIG="${CONFIG_DIR}/gpu${GPU}.json"
+for MAPPING in "${MAPPINGS[@]}"; do
+    if [[ "$MAPPING" == *:* ]]; then
+        GPU="${MAPPING%%:*}"
+        CONFIG_ID="${MAPPING#*:}"
+    else
+        GPU="$MAPPING"
+        CONFIG_ID="$MAPPING"
+    fi
+    if ! [[ "$GPU" =~ ^[0-9]+$ && "$CONFIG_ID" =~ ^[0-9]+$ ]]; then
+        echo "Error: invalid mapping '$MAPPING'; expected physical_gpu:logical_config"
+        exit 1
+    fi
+    CONFIG="${CONFIG_DIR}/gpu${CONFIG_ID}.json"
     CHECKPOINT="${CONFIG}.checkpoint.json"
-    LOG="${CONFIG_DIR}/gpu${GPU}.log"
+    LOG="${CONFIG_DIR}/gpu${GPU}-slice${CONFIG_ID}.log"
+    COMPLETE=0
+    if [[ -f "$LOG" ]] && grep -q "^Offset Enc Time:" "$LOG"; then
+        COMPLETE=1
+    fi
 
-    printf "GPU %-2s  " "$GPU"
+    printf "GPU %-2s slice %-2s  " "$GPU" "$CONFIG_ID"
 
     if [[ ! -f "$CONFIG" ]]; then
         echo "[no config]"
@@ -42,7 +57,9 @@ for GPU in "${GPUS[@]}"; do
     if [[ -f "$CHECKPOINT" ]]; then
         # index in checkpoint = gap iterations completed (0..enc_count)
         INDEX=$(python3 -c "import json; d=json.load(open('${CHECKPOINT}')); print(d.get('index', 0))" 2>/dev/null || echo "?")
-        if [[ "$TOTAL" != "?" && "$INDEX" != "?" && "$TOTAL" -gt 0 ]]; then
+        if [[ "$COMPLETE" -eq 1 ]]; then
+            printf "complete (last checkpoint=%s/%s)" "$INDEX" "$TOTAL"
+        elif [[ "$TOTAL" != "?" && "$INDEX" != "?" && "$TOTAL" -gt 0 ]]; then
             PCT=$(python3 -c "print(f'{100*${INDEX}/${TOTAL}:.1f}')" 2>/dev/null || echo "?")
             printf "progress=%s/%s (%s%%)" "$INDEX" "$TOTAL" "$PCT"
         else
@@ -53,7 +70,9 @@ for GPU in "${GPUS[@]}"; do
     fi
 
     # Check if still running
-    if pgrep -f "run2 ${CONFIG}" > /dev/null 2>&1; then
+    if [[ "$COMPLETE" -eq 1 ]]; then
+        printf "  [complete]"
+    elif pgrep -f "run2 ${CONFIG}" > /dev/null 2>&1; then
         printf "  [running]"
     else
         printf "  [stopped]"
@@ -66,12 +85,19 @@ echo ""
 echo "=== Matches ==="
 # Check output.txt and all log files for hits
 FOUND=0
-for GPU in "${GPUS[@]}"; do
-    LOG="${CONFIG_DIR}/gpu${GPU}.log"
+for MAPPING in "${MAPPINGS[@]}"; do
+    if [[ "$MAPPING" == *:* ]]; then
+        GPU="${MAPPING%%:*}"
+        CONFIG_ID="${MAPPING#*:}"
+    else
+        GPU="$MAPPING"
+        CONFIG_ID="$MAPPING"
+    fi
+    LOG="${CONFIG_DIR}/gpu${GPU}-slice${CONFIG_ID}.log"
     if [[ -f "$LOG" ]]; then
         HITS=$(grep -i "Found at\|Found Match" "$LOG" 2>/dev/null || true)
         if [[ -n "$HITS" ]]; then
-            echo "GPU ${GPU}: $HITS"
+            echo "GPU ${GPU}, slice ${CONFIG_ID}: $HITS"
             FOUND=1
         fi
     fi

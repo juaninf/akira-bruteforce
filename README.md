@@ -159,7 +159,7 @@ echo '030acddc0b06ac09ec7c6e578d350faef3bae4ec2233dc33fcacf55f61cca9f3  known_ra
 Create a small, known search window and run it on GPU 0:
 
 ```bash
-python .claude/skills/akira-decryptor/scripts/gen_configs.py \
+./gen_configs.py \
   --t3-start 1786077189676000000 --t3-end 1786077189677000000 \
   --offset 1500000 --range 100000 \
   --plaintext 0x4e4b5f4152494b41 --encrypted 0x626f1e63b2d7e96f \

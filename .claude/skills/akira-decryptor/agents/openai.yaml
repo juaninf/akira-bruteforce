@@ -1,4 +1,0 @@
-interface:
-  display_name: "Akira Decryptor"
-  short_description: "Recover Akira ESXi/Linux files with GPUs"
-  default_prompt: "Use $akira-decryptor to recover and verify an authorized Akira ESXi/Linux encrypted file."
