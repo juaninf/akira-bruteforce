@@ -18,7 +18,7 @@ apt-get install -y nettle-dev libssl-dev nvidia-cuda-toolkit nvidia-cuda-toolkit
 ## Building
 
 ```
-git clone https://github.com/yohanes/akira-bruteforce
+git clone https://github.com/juaninf/akira-bruteforce
 cd akira-bruteforce
 make
 ```
@@ -139,6 +139,53 @@ Once T3 and T4 are recovered:
 ```
 
 The file is decrypted in-place and renamed (`.akira` suffix removed).
+
+---
+
+## Known encrypted sample example
+
+The ransomware-toolkit repository provides the encrypted test file
+[`known_random.bin.akira`](https://github.com/peacker/ransomware-toolkit/blob/main/Ransomware/Akira/Encrypted%20files/known_random.bin.akira).
+It is an encrypted victim-file fixture, not a ransomware executable.
+
+Download it and verify its SHA-256 before testing:
+
+```bash
+curl -fL -o known_random.bin.akira \
+  'https://raw.githubusercontent.com/peacker/ransomware-toolkit/main/Ransomware/Akira/Encrypted%20files/known_random.bin.akira'
+echo '030acddc0b06ac09ec7c6e578d350faef3bae4ec2233dc33fcacf55f61cca9f3  known_random.bin.akira' | sha256sum -c -
+```
+
+Create a small, known search window and run it on GPU 0:
+
+```bash
+./gen_configs.py \
+  --t3-start 1786077189676000000 --t3-end 1786077189677000000 \
+  --offset 1500000 --range 100000 \
+  --plaintext 0x4e4b5f4152494b41 --encrypted 0x626f1e63b2d7e96f \
+  --gpus 1 --out-dir search_skill_test --prefix gpu
+./akira-bruteforce run2 search_skill_test/gpu0.json 0
+```
+
+The expected result is T3 `1786077189676504072`, T4 `1786077189678050965`,
+and a gap of `1546893` nanoseconds. Decrypt only a copy because `decrypt`
+changes the file in place and removes its `.akira` suffix:
+
+```bash
+cp -p known_random.bin.akira known_random.test.akira
+./decrypt known_random.test.akira 0 0 1786077189676504072 1786077189678050965
+head -n 2 known_random.test
+```
+
+The output starts with:
+
+```text
+AKIRA_KNOWN_PREFIX_2026_07_09_1332UTC
+HELLO_WORLD_KNOWN_TEXT_FOR_DECRYPTOR_TEST
+```
+
+This checks the KCipher2 region only. T1 and T2 are required to decrypt any
+ChaCha8 regions.
 
 ---
 
