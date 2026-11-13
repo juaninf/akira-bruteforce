@@ -18,7 +18,7 @@ apt-get install -y nettle-dev libssl-dev nvidia-cuda-toolkit nvidia-cuda-toolkit
 ## Building
 
 ```
-git clone https://github.com/yohanes/akira-bruteforce
+git clone https://github.com/juaninf/akira-bruteforce
 cd akira-bruteforce
 make
 ```
