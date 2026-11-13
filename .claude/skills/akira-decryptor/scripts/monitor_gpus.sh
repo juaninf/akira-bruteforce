@@ -39,6 +39,10 @@ for MAPPING in "${MAPPINGS[@]}"; do
     CONFIG="${CONFIG_DIR}/gpu${CONFIG_ID}.json"
     CHECKPOINT="${CONFIG}.checkpoint.json"
     LOG="${CONFIG_DIR}/gpu${GPU}-slice${CONFIG_ID}.log"
+    COMPLETE=0
+    if [[ -f "$LOG" ]] && grep -q "^Offset Enc Time:" "$LOG"; then
+        COMPLETE=1
+    fi
 
     printf "GPU %-2s slice %-2s  " "$GPU" "$CONFIG_ID"
 
@@ -53,7 +57,9 @@ for MAPPING in "${MAPPINGS[@]}"; do
     if [[ -f "$CHECKPOINT" ]]; then
         # index in checkpoint = gap iterations completed (0..enc_count)
         INDEX=$(python3 -c "import json; d=json.load(open('${CHECKPOINT}')); print(d.get('index', 0))" 2>/dev/null || echo "?")
-        if [[ "$TOTAL" != "?" && "$INDEX" != "?" && "$TOTAL" -gt 0 ]]; then
+        if [[ "$COMPLETE" -eq 1 ]]; then
+            printf "complete (last checkpoint=%s/%s)" "$INDEX" "$TOTAL"
+        elif [[ "$TOTAL" != "?" && "$INDEX" != "?" && "$TOTAL" -gt 0 ]]; then
             PCT=$(python3 -c "print(f'{100*${INDEX}/${TOTAL}:.1f}')" 2>/dev/null || echo "?")
             printf "progress=%s/%s (%s%%)" "$INDEX" "$TOTAL" "$PCT"
         else
@@ -64,7 +70,9 @@ for MAPPING in "${MAPPINGS[@]}"; do
     fi
 
     # Check if still running
-    if pgrep -f "run2 ${CONFIG}" > /dev/null 2>&1; then
+    if [[ "$COMPLETE" -eq 1 ]]; then
+        printf "  [complete]"
+    elif pgrep -f "run2 ${CONFIG}" > /dev/null 2>&1; then
         printf "  [running]"
     else
         printf "  [stopped]"

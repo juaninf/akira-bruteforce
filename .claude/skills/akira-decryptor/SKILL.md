@@ -25,11 +25,13 @@ Never execute the ransomware as part of this skill. Never decrypt the only copy:
 
 Use the current repository when already inside it. Otherwise clone `https://github.com/juaninf/akira-bruteforce`.
 
-On Debian or Ubuntu, install `nettle-dev`, `libssl-dev`, `nvidia-cuda-toolkit`, `nvidia-cuda-toolkit-gcc`, `build-essential`, `git`, and `nasm`. Check the GPU compute capability before building; the Makefile's CUDA architecture must match the host. Then run `make` and confirm these tools exist:
+On Debian or Ubuntu, install `nettle-dev`, `libssl-dev`, `nvidia-cuda-toolkit`, `nvidia-cuda-toolkit-gcc`, `build-essential`, `git`, and `nasm`. Check the GPU compute capability before building; the Makefile's CUDA architecture must match the host. Then run `make` and `make -C util`. Confirm these tools exist and are binaries for the current host:
 
 - `akira-bruteforce`
 - `decrypt`
 - `util/readhex`
+
+If an existing `decrypt` binary is for another operating system or architecture, rebuild it with `make -B decrypt` after installing the development headers.
 
 The maintained fork contains the corrected `run2` bounds check. Do not silently fall back to an older upstream binary.
 
