@@ -1,6 +1,8 @@
 # Known-target regression
 
-Use this only to check the toolchain. The fixture is `tests/known_random.bin.akira`.
+Use this only to check the toolchain. The canonical fixture is
+[`known_random.bin.akira`](https://github.com/peacker/ransomware-toolkit/blob/main/Ransomware/Akira/Encrypted%20files/known_random.bin.akira)
+in ransomware-toolkit. A copy is also available at `tests/known_random.bin.akira`.
 
 ## Inputs
 
